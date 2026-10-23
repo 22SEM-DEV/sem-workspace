@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Meta tag Privasi (Unlisted) -->
+    <!-- Meta tag Privasi (Unlisted) agar tidak dilacak Google -->
     <meta name="robots" content="noindex, nofollow">
-    <title>VOD Timestamp Tool - Update 9</title>
+    <title>VOD Timestamp Tool - Update 10</title>
     <style>
+        /* Catppuccin Macchiato Theme */
         body { 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
             background-color: #1e1e2e; 
@@ -19,6 +20,7 @@
             box-sizing: border-box;
             overflow: hidden;
         }
+        
         .panel { 
             background-color: #313244; 
             padding: 20px; 
@@ -26,13 +28,14 @@
             display: flex; 
             flex-direction: column; 
             gap: 15px; 
-            overflow-y: auto; /* Scroll independen */
+            overflow-y: auto; /* Mengizinkan scroll independen */
         }
         
-        #leftPanel { flex: 0 0 75%; transition: flex 0.1s ease; }
-        #rightPanel { flex: 1; min-width: 250px; }
+        /* Layout Default 'Max' diatur ke 85% */
+        #leftPanel { flex: 0 0 85%; transition: flex 0.2s ease; }
+        #rightPanel { flex: 1; min-width: 280px; }
 
-        /* Draggable Resizer (Garis Geser) */
+        /* Draggable Resizer */
         #resizer {
             width: 8px;
             background-color: #45475a;
@@ -42,6 +45,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            flex-shrink: 0;
         }
         #resizer:hover, #resizer.active { background-color: #89b4fa; }
         #resizer::after {
@@ -50,14 +54,16 @@
             font-weight: bold;
         }
 
-        input, button { 
+        input, button, textarea { 
             padding: 10px; 
             border-radius: 5px; 
             border: 1px solid #45475a; 
             background-color: #181825; 
             color: #cdd6f4; 
             font-size: 14px; 
+            box-sizing: border-box;
         }
+        
         button { 
             background-color: #89b4fa; 
             color: #11111b; 
@@ -77,24 +83,44 @@
         .btn-icon { background-color: #a6e3a1; color: #11111b; padding: 5px 10px; font-size: 14px;}
         .btn-icon:hover { background-color: #94e2d5; }
         
-        .controls-group { display: flex; gap: 10px; align-items: center; }
+        .controls-group { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
         .controls-group input { flex: 1; }
 
-        /* Area Video & Samaran */
-        #videoContainer { position: relative; width: 100%; aspect-ratio: 16/9; background-color: #11111b; border-radius: 5px; overflow: hidden; flex-shrink: 0; }
+        /* Area Video */
+        #videoContainer { 
+            position: relative; 
+            width: 100%; 
+            aspect-ratio: 16/9; 
+            background-color: #11111b; 
+            border-radius: 5px; 
+            overflow: hidden; 
+            flex-shrink: 0; 
+        }
         iframe { width: 100%; height: 100%; border: none; }
         
+        /* Overlays untuk Mode Privasi */
         #tdmOverlay, #gsOverlay {
             display: none; position: absolute; left: 0; width: 100%; background-color: #11111b; z-index: 10;
         }
         #tdmOverlay { top: 0; height: 100%; } 
         #gsOverlay { top: 0; height: calc(100% - 60px); pointer-events: none; } 
 
-        /* Player Controls Bar */
+        /* Player Controls Bar - Relokasi tombol Skip ke paling kanan */
         .player-controls {
-            display: flex; gap: 8px; align-items: center; background: #181825; padding: 10px; border-radius: 5px; flex-wrap: wrap; flex-shrink: 0; font-size: 13px;
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; /* Memisahkan grup kiri dan kanan */
+            background: #181825; 
+            padding: 10px; 
+            border-radius: 5px; 
+            flex-wrap: wrap; 
+            flex-shrink: 0; 
+            font-size: 13px;
         }
-        .player-controls input { width: 50px; text-align: center; padding: 6px; }
+        .player-controls .left-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .player-controls .right-group { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+        
+        .player-controls input { width: 55px; text-align: center; padding: 6px; }
         .player-controls button { padding: 6px 10px; }
 
         /* Dynamic List Timestamp */
@@ -113,16 +139,27 @@
         .ts-desc:focus { background-color: #313244; border-radius: 4px; }
         .ts-del { background: transparent; color: #f38ba8; border: none; cursor: pointer; padding: 4px 8px; font-weight: bold; }
         .ts-del:hover { color: #eba0ac; background: #313244; border-radius: 4px; }
+
+        /* Modal Import Kustom */
+        #importModal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(17, 17, 27, 0.85); z-index: 100; align-items: center; justify-content: center;
+        }
+        .modal-content {
+            background: #313244; padding: 20px; border-radius: 10px; width: 90%; max-width: 600px; 
+            display: flex; flex-direction: column; gap: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
     </style>
 </head>
 <body>
 
 <div class="panel" id="leftPanel">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
-        <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
-            🎥 Player & Capture
-        </h3>
-        <div style="display: flex; gap: 5px;">
+    <!-- Header Controls - Bisa ter-scroll ke atas -->
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; flex-wrap: wrap; gap: 10px;">
+        <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">🎥 Player & Capture</h3>
+        <div style="display: flex; gap: 5px; align-items: center;">
+            <span style="font-size: 12px; color: #a6adc8;">Size:</span>
+            <button class="btn-layout" onclick="setLayout(85)" title="Default Max (85%)">Max</button>
             <button class="btn-layout" onclick="setLayout(75)" title="Preset 75%">75%</button>
             <button class="btn-layout" onclick="setLayout(50)" title="Preset 50%">50%</button>
             <button class="btn-layout" onclick="setLayout(25)" title="Preset 25%">25%</button>
@@ -133,7 +170,7 @@
     </div>
     
     <div class="controls-group" style="flex-shrink: 0;">
-        <input type="text" id="videoId" placeholder="Link/ID YouTube (misal: dQw4w9WgXcQ)">
+        <input type="text" id="videoId" placeholder="Link/ID YouTube (misal: watch?v=... atau /live/...)">
         <button onclick="loadVideo()">Load</button>
     </div>
     
@@ -143,25 +180,36 @@
         <div id="gsOverlay"></div>
     </div>
 
+    <!-- Media Controls dengan Skip Buttons di Kanan -->
     <div class="player-controls">
-        <button onclick="seekVideo(-5)" title="Mundur 5 detik">⏪ -5s</button>
-        <button onclick="togglePlayPause()" title="Play / Pause">⏯️</button>
-        <button onclick="seekVideo(5)" title="Maju 5 detik">+5s ⏩</button>
-        
-        <span style="margin-left: 10px;">Speed:</span>
-        <input type="number" id="speedInput" value="1.5" step="0.25" min="0.25" max="2">
-        <button onclick="applySpeed()">⚡ Set</button>
-        <button onclick="setSpeed(1)">1x</button>
+        <div class="left-group">
+            <button onclick="togglePlayPause()" title="Play / Pause">⏯️</button>
+            
+            <span style="margin-left: 10px;">Speed:</span>
+            <input type="number" id="speedInput" value="1.5" step="0.25" min="0.25" max="2">
+            <button onclick="applySpeed()">⚡ Set</button>
+            <button onclick="setSpeed(1)">1x</button>
 
-        <span style="margin-left: 10px;">Vol:</span>
-        <input type="number" id="volInput" value="50" min="0" max="100">
-        <button onclick="applyVolume()">🔊 Set</button>
+            <span style="margin-left: 10px;">Vol:</span>
+            <input type="number" id="volInput" value="50" min="0" max="100">
+            <button onclick="applyVolume()">🔊 Set</button>
+        </div>
+        
+        <div class="right-group">
+            <button onclick="seekVideo(-5)" title="Mundur 5 detik">⏪ -5s</button>
+            <button onclick="seekVideo(5)" title="Maju 5 detik">+5s ⏩</button>
+        </div>
+    </div>
+    
+    <div style="height: 100px; flex-shrink: 0; color: #45475a; display: flex; align-items: center; justify-content: center;">
+        <small>Scroll ke bawah untuk menyembunyikan menu atas</small>
     </div>
 </div>
 
-<!-- Pemisah Fleksibel (Resizer) -->
+<!-- Draggable Resizer -->
 <div id="resizer" title="Geser untuk mengatur ukuran layar"></div>
 
+<!-- Panel Kanan -->
 <div class="panel" id="rightPanel">
     <h3 style="margin-top: 0; margin-bottom: 5px; flex-shrink: 0;">📝 Hasil Timestamps</h3>
     <small style="color: #a6adc8; margin-bottom: 10px; display: block; flex-shrink: 0;"><i>Workspace Kacang Beruntung</i></small>
@@ -179,10 +227,23 @@
     </div>
 
     <div class="controls-group" style="flex-wrap: wrap; flex-shrink: 0; margin-top: 5px;">
-        <button onclick="importTxt()" style="flex: 1; background-color: #a6e3a1;">📥 Import</button>
+        <button onclick="openImportModal()" style="flex: 1; background-color: #a6e3a1;">📥 Import</button>
         <button onclick="copyToClipboard()" style="flex: 1;">📋 Copy</button>
         <button onclick="exportTxt()" style="flex: 1;">💾 Export</button>
         <button onclick="clearList()" class="btn-danger" style="flex: 1;">🗑️ Clear</button>
+    </div>
+</div>
+
+<!-- Modal Kustom untuk Import Text Multiline -->
+<div id="importModal">
+    <div class="modal-content">
+        <h3 style="margin: 0; color: #a6e3a1;">📥 Import Timestamps</h3>
+        <p style="margin: 0; font-size: 13px; color: #a6adc8;">Paste semua hasil timestamp dari sesi sebelumnya di bawah ini (mendukung multi-baris).</p>
+        <textarea id="importText" rows="10" placeholder="00:15:30 - Momen lucu&#10;00:20:45 - Diskusi fitur..." style="width: 100%; resize: vertical; font-family: monospace;"></textarea>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button onclick="closeImportModal()" style="background-color: #45475a; color: #cdd6f4;">Batal</button>
+            <button onclick="processImport()" style="background-color: #a6e3a1;">Proses Import</button>
+        </div>
     </div>
 </div>
 
@@ -193,6 +254,7 @@
     let isTDM = false;
     let isGS = false;
     
+    // Inisialisasi API YouTube
     const tag = document.createElement('script');
     tag.src = "https://www.youtube.com/iframe_api";
     const firstScriptTag = document.getElementsByTagName('script')[0];
@@ -205,11 +267,20 @@
         });
     }
 
+    // Logika Pintar Pemuat URL
     function loadVideo() {
         let id = document.getElementById('videoId').value;
         if (!id) return;
-        if(id.includes('v=')) id = id.split('v=')[1].split('&')[0];
-        else if (id.includes('youtu.be/')) id = id.split('youtu.be/')[1].split('?')[0];
+        
+        // Deteksi format URL YouTube (v=, youtu.be, atau live)
+        if(id.includes('v=')) {
+            id = id.split('v=')[1].split('&')[0];
+        } else if (id.includes('youtu.be/')) {
+            id = id.split('youtu.be/')[1].split('?')[0];
+        } else if (id.includes('/live/')) {
+            id = id.split('/live/')[1].split('?')[0];
+        }
+        
         if(player && player.loadVideoById) player.loadVideoById(id);
     }
 
@@ -222,17 +293,13 @@
         isDragging = true;
         resizer.classList.add('active');
         document.body.style.cursor = 'col-resize';
-        // Cegah seleksi teks tidak sengaja saat menggeser
         document.body.style.userSelect = 'none'; 
     });
 
     document.addEventListener('mousemove', function(e) {
         if (!isDragging) return;
-        // Hitung persentase posisi mouse terhadap lebar total window
         let newWidthPercent = (e.clientX / document.body.clientWidth) * 100;
-        
-        // Batasi geseran minimal 20% dan maksimal 80% agar tidak hilang
-        if(newWidthPercent > 20 && newWidthPercent < 80) {
+        if(newWidthPercent > 20 && newWidthPercent < 90) {
             leftPanel.style.flex = `0 0 calc(${newWidthPercent}% - 7px)`;
         }
     });
@@ -246,7 +313,7 @@
         }
     });
 
-    // Preset Layout Lama
+    // Preset Layout
     function setLayout(percent) {
         leftPanel.style.flex = `0 0 calc(${percent}% - 7px)`;
     }
@@ -266,10 +333,7 @@
         }
     }
 
-    function applySpeed() {
-        const speed = parseFloat(document.getElementById('speedInput').value);
-        setSpeed(speed);
-    }
+    function applySpeed() { setSpeed(parseFloat(document.getElementById('speedInput').value)); }
     function setSpeed(val) {
         if(player && player.setPlaybackRate) {
             player.setPlaybackRate(val);
@@ -278,8 +342,7 @@
     }
 
     function applyVolume() {
-        const vol = parseInt(document.getElementById('volInput').value);
-        if(player && player.setVolume) player.setVolume(vol);
+        if(player && player.setVolume) player.setVolume(parseInt(document.getElementById('volInput').value));
     }
 
     // -- FORMAT & CAPTURE --
@@ -408,7 +471,40 @@
         document.getElementById('gsOverlay').style.display = isGS ? 'block' : 'none';
     }
 
-    // -- EKSPOR DATA --
+    // -- MODAL IMPORT TEXT --
+    function openImportModal() {
+        document.getElementById('importText').value = '';
+        document.getElementById('importModal').style.display = 'flex';
+        document.getElementById('importText').focus();
+    }
+
+    function closeImportModal() {
+        document.getElementById('importModal').style.display = 'none';
+    }
+
+    function processImport() {
+        const input = document.getElementById('importText').value;
+        if(!input) return closeImportModal();
+        
+        const lines = input.split('\n');
+        lines.forEach(line => {
+            const match = line.match(/^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})\s+-\s+(.*)$/);
+            if(match) {
+                const h = parseInt(match[1] || 0);
+                const m = parseInt(match[2] || 0);
+                const s = parseInt(match[3] || 0);
+                const text = match[4].trim();
+                const totalSec = (h * 3600) + (m * 60) + s;
+                timestamps.push({ id: Date.now() + Math.random(), time: totalSec, text: text });
+            }
+        });
+        
+        timestamps.sort((a, b) => a.time - b.time);
+        renderList();
+        closeImportModal();
+    }
+
+    // -- EKSPOR & COPY DATA --
     function getHeaderInfo() {
         if(player && typeof player.getVideoData === 'function') {
             const data = player.getVideoData();
@@ -442,27 +538,6 @@
         anchor.download = "Hasil_Timestamp_VOD.txt";
         anchor.href = window.URL.createObjectURL(blob);
         anchor.click();
-    }
-
-    function importTxt() {
-        const input = prompt("Paste hasil teks timestamp sebelumnya di sini:");
-        if(!input) return;
-        
-        const lines = input.split('\n');
-        lines.forEach(line => {
-            const match = line.match(/^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})\s+-\s+(.*)$/);
-            if(match) {
-                const h = parseInt(match[1] || 0);
-                const m = parseInt(match[2] || 0);
-                const s = parseInt(match[3] || 0);
-                const text = match[4].trim();
-                const totalSec = (h * 3600) + (m * 60) + s;
-                timestamps.push({ id: Date.now() + Math.random(), time: totalSec, text: text });
-            }
-        });
-        
-        timestamps.sort((a, b) => a.time - b.time);
-        renderList();
     }
 
     function clearList() {
