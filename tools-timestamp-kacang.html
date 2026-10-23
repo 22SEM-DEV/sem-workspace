@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Meta tag Privasi (Unlisted) -->
+    <meta name="robots" content="noindex, nofollow">
+    <title>VOD Timestamp Tool - Update 9</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #1e1e2e; 
+            color: #cdd6f4; 
+            margin: 0; 
+            padding: 20px; 
+            display: flex; 
+            gap: 15px; 
+            height: 100vh;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+        .panel { 
+            background-color: #313244; 
+            padding: 20px; 
+            border-radius: 10px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 15px; 
+            overflow-y: auto; /* Scroll independen */
+        }
+        
+        #leftPanel { flex: 0 0 75%; transition: flex 0.1s ease; }
+        #rightPanel { flex: 1; min-width: 250px; }
+
+        /* Draggable Resizer (Garis Geser) */
+        #resizer {
+            width: 8px;
+            background-color: #45475a;
+            cursor: col-resize;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #resizer:hover, #resizer.active { background-color: #89b4fa; }
+        #resizer::after {
+            content: "⋮";
+            color: #1e1e2e;
+            font-weight: bold;
+        }
+
+        input, button { 
+            padding: 10px; 
+            border-radius: 5px; 
+            border: 1px solid #45475a; 
+            background-color: #181825; 
+            color: #cdd6f4; 
+            font-size: 14px; 
+        }
+        button { 
+            background-color: #89b4fa; 
+            color: #11111b; 
+            cursor: pointer; 
+            font-weight: bold; 
+            transition: 0.2s; 
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        button:hover { background-color: #b4befe; }
+        .btn-danger { background-color: #f38ba8; }
+        .btn-danger:hover { background-color: #eba0ac; }
+        .btn-layout { background-color: #cba6f7; color: #11111b; padding: 5px 10px; font-size: 12px;}
+        .btn-layout:hover { background-color: #f5c2e7; }
+        .btn-icon { background-color: #a6e3a1; color: #11111b; padding: 5px 10px; font-size: 14px;}
+        .btn-icon:hover { background-color: #94e2d5; }
+        
+        .controls-group { display: flex; gap: 10px; align-items: center; }
+        .controls-group input { flex: 1; }
+
+        /* Area Video & Samaran */
+        #videoContainer { position: relative; width: 100%; aspect-ratio: 16/9; background-color: #11111b; border-radius: 5px; overflow: hidden; flex-shrink: 0; }
+        iframe { width: 100%; height: 100%; border: none; }
+        
+        #tdmOverlay, #gsOverlay {
+            display: none; position: absolute; left: 0; width: 100%; background-color: #11111b; z-index: 10;
+        }
+        #tdmOverlay { top: 0; height: 100%; } 
+        #gsOverlay { top: 0; height: calc(100% - 60px); pointer-events: none; } 
+
+        /* Player Controls Bar */
+        .player-controls {
+            display: flex; gap: 8px; align-items: center; background: #181825; padding: 10px; border-radius: 5px; flex-wrap: wrap; flex-shrink: 0; font-size: 13px;
+        }
+        .player-controls input { width: 50px; text-align: center; padding: 6px; }
+        .player-controls button { padding: 6px 10px; }
+
+        /* Dynamic List Timestamp */
+        #outputList {
+            flex-grow: 1; background-color: #181825; border: 1px solid #45475a; border-radius: 5px; 
+            padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; min-height: 150px;
+        }
+        .ts-row { display: flex; align-items: center; gap: 10px; padding: 4px; border-radius: 4px; transition: 0.3s; }
+        .ts-row.new-ts { background-color: rgba(137, 180, 250, 0.15); border-left: 3px solid #89b4fa; }
+
+        .ts-time { background-color: #313244; color: #89b4fa; border: 1px solid #89b4fa; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size: 14px; cursor: pointer; }
+        .ts-time:hover { background-color: #45475a; }
+        .ts-time-edit { width: 80px; font-family: monospace; text-align: center; }
+        
+        .ts-desc { flex: 1; background: transparent; border: none; color: #cdd6f4; font-family: monospace; font-size: 14px; padding: 4px; outline: none; }
+        .ts-desc:focus { background-color: #313244; border-radius: 4px; }
+        .ts-del { background: transparent; color: #f38ba8; border: none; cursor: pointer; padding: 4px 8px; font-weight: bold; }
+        .ts-del:hover { color: #eba0ac; background: #313244; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="panel" id="leftPanel">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+        <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+            🎥 Player & Capture
+        </h3>
+        <div style="display: flex; gap: 5px;">
+            <button class="btn-layout" onclick="setLayout(75)" title="Preset 75%">75%</button>
+            <button class="btn-layout" onclick="setLayout(50)" title="Preset 50%">50%</button>
+            <button class="btn-layout" onclick="setLayout(25)" title="Preset 25%">25%</button>
+            <span style="margin: 0 5px; color: #45475a;">|</span>
+            <button class="btn-icon" onclick="toggleGS()" title="Gelap Sebagian (Shift+1)">🕶️</button>
+            <button class="btn-danger" onclick="toggleTDM()" style="padding: 5px 10px;" title="Total Dark Mode (Esc)">⬛</button>
+        </div>
+    </div>
+    
+    <div class="controls-group" style="flex-shrink: 0;">
+        <input type="text" id="videoId" placeholder="Link/ID YouTube (misal: dQw4w9WgXcQ)">
+        <button onclick="loadVideo()">Load</button>
+    </div>
+    
+    <div id="videoContainer">
+        <div id="player"></div>
+        <div id="tdmOverlay"></div>
+        <div id="gsOverlay"></div>
+    </div>
+
+    <div class="player-controls">
+        <button onclick="seekVideo(-5)" title="Mundur 5 detik">⏪ -5s</button>
+        <button onclick="togglePlayPause()" title="Play / Pause">⏯️</button>
+        <button onclick="seekVideo(5)" title="Maju 5 detik">+5s ⏩</button>
+        
+        <span style="margin-left: 10px;">Speed:</span>
+        <input type="number" id="speedInput" value="1.5" step="0.25" min="0.25" max="2">
+        <button onclick="applySpeed()">⚡ Set</button>
+        <button onclick="setSpeed(1)">1x</button>
+
+        <span style="margin-left: 10px;">Vol:</span>
+        <input type="number" id="volInput" value="50" min="0" max="100">
+        <button onclick="applyVolume()">🔊 Set</button>
+    </div>
+</div>
+
+<!-- Pemisah Fleksibel (Resizer) -->
+<div id="resizer" title="Geser untuk mengatur ukuran layar"></div>
+
+<div class="panel" id="rightPanel">
+    <h3 style="margin-top: 0; margin-bottom: 5px; flex-shrink: 0;">📝 Hasil Timestamps</h3>
+    <small style="color: #a6adc8; margin-bottom: 10px; display: block; flex-shrink: 0;"><i>Workspace Kacang Beruntung</i></small>
+    
+    <div id="outputList"></div>
+    
+    <div class="controls-group" style="flex-shrink: 0;">
+        <label style="font-size: 13px;">Offset (detik):</label>
+        <input type="number" id="timeOffset" value="-3" style="width: 50px;">
+    </div>
+    
+    <div class="controls-group" style="flex-shrink: 0;">
+        <input type="text" id="descInput" placeholder="Ketik deskripsi... (Enter = Capture)">
+        <button onclick="captureTime()">Capture (Enter)</button>
+    </div>
+
+    <div class="controls-group" style="flex-wrap: wrap; flex-shrink: 0; margin-top: 5px;">
+        <button onclick="importTxt()" style="flex: 1; background-color: #a6e3a1;">📥 Import</button>
+        <button onclick="copyToClipboard()" style="flex: 1;">📋 Copy</button>
+        <button onclick="exportTxt()" style="flex: 1;">💾 Export</button>
+        <button onclick="clearList()" class="btn-danger" style="flex: 1;">🗑️ Clear</button>
+    </div>
+</div>
+
+<script>
+    let player;
+    let timestamps = []; 
+    let lastAddedId = null; 
+    let isTDM = false;
+    let isGS = false;
+    
+    const tag = document.createElement('script');
+    tag.src = "https://www.youtube.com/iframe_api";
+    const firstScriptTag = document.getElementsByTagName('script')[0];
+    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+    function onYouTubeIframeAPIReady() {
+        player = new YT.Player('player', {
+            height: '100%', width: '100%', videoId: '', 
+            playerVars: { 'playsinline': 1 }
+        });
+    }
+
+    function loadVideo() {
+        let id = document.getElementById('videoId').value;
+        if (!id) return;
+        if(id.includes('v=')) id = id.split('v=')[1].split('&')[0];
+        else if (id.includes('youtu.be/')) id = id.split('youtu.be/')[1].split('?')[0];
+        if(player && player.loadVideoById) player.loadVideoById(id);
+    }
+
+    // -- LOGIKA DRAGGABLE RESIZER --
+    const resizer = document.getElementById('resizer');
+    const leftPanel = document.getElementById('leftPanel');
+    let isDragging = false;
+
+    resizer.addEventListener('mousedown', function(e) {
+        isDragging = true;
+        resizer.classList.add('active');
+        document.body.style.cursor = 'col-resize';
+        // Cegah seleksi teks tidak sengaja saat menggeser
+        document.body.style.userSelect = 'none'; 
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        // Hitung persentase posisi mouse terhadap lebar total window
+        let newWidthPercent = (e.clientX / document.body.clientWidth) * 100;
+        
+        // Batasi geseran minimal 20% dan maksimal 80% agar tidak hilang
+        if(newWidthPercent > 20 && newWidthPercent < 80) {
+            leftPanel.style.flex = `0 0 calc(${newWidthPercent}% - 7px)`;
+        }
+    });
+
+    document.addEventListener('mouseup', function(e) {
+        if(isDragging) {
+            isDragging = false;
+            resizer.classList.remove('active');
+            document.body.style.cursor = 'default';
+            document.body.style.userSelect = 'auto';
+        }
+    });
+
+    // Preset Layout Lama
+    function setLayout(percent) {
+        leftPanel.style.flex = `0 0 calc(${percent}% - 7px)`;
+    }
+
+    // -- KONTROL MEDIA --
+    function togglePlayPause() {
+        if(!player || typeof player.getPlayerState !== 'function') return;
+        const state = player.getPlayerState();
+        if(state === 1) player.pauseVideo();
+        else player.playVideo();
+    }
+    
+    function seekVideo(seconds) {
+        if(player && typeof player.getCurrentTime === 'function') {
+            const currentTime = player.getCurrentTime();
+            player.seekTo(Math.max(0, currentTime + seconds), true);
+        }
+    }
+
+    function applySpeed() {
+        const speed = parseFloat(document.getElementById('speedInput').value);
+        setSpeed(speed);
+    }
+    function setSpeed(val) {
+        if(player && player.setPlaybackRate) {
+            player.setPlaybackRate(val);
+            document.getElementById('speedInput').value = val;
+        }
+    }
+
+    function applyVolume() {
+        const vol = parseInt(document.getElementById('volInput').value);
+        if(player && player.setVolume) player.setVolume(vol);
+    }
+
+    // -- FORMAT & CAPTURE --
+    function formatTime(seconds) {
+        seconds = Math.max(0, Math.floor(seconds));
+        const duration = (player && typeof player.getDuration === 'function') ? player.getDuration() : 0;
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        
+        if (duration >= 3600 || h > 0) {
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+
+    function captureTime() {
+        if (!player || typeof player.getCurrentTime !== 'function') return;
+        
+        const offset = parseInt(document.getElementById('timeOffset').value) || 0;
+        const adjustedTime = Math.max(0, player.getCurrentTime() + offset); 
+        const desc = document.getElementById('descInput').value || "Momen";
+        
+        const newId = Date.now();
+        timestamps.push({ id: newId, time: adjustedTime, text: desc });
+        lastAddedId = newId; 
+        
+        timestamps.sort((a, b) => a.time - b.time);
+        renderList();
+        
+        document.getElementById('descInput').value = '';
+        document.getElementById('descInput').focus({ preventScroll: true });
+        
+        const listDiv = document.getElementById('outputList');
+        listDiv.scrollTop = listDiv.scrollHeight;
+    }
+
+    function renderList() {
+        const container = document.getElementById('outputList');
+        container.innerHTML = ''; 
+        
+        timestamps.forEach((ts, index) => {
+            const row = document.createElement('div');
+            row.className = 'ts-row';
+            if (ts.id === lastAddedId) row.classList.add('new-ts');
+            
+            const timeWrapper = document.createElement('div');
+            const timeBtn = document.createElement('button');
+            timeBtn.className = 'ts-time';
+            timeBtn.innerText = formatTime(ts.time);
+            timeBtn.title = "Klik: Ke Waktu | Dobel Klik: Edit";
+            
+            timeBtn.onclick = () => { player.seekTo(ts.time, true); };
+            
+            timeBtn.ondblclick = () => {
+                const editInput = document.createElement('input');
+                editInput.type = 'text';
+                editInput.className = 'ts-time-edit';
+                editInput.value = formatTime(ts.time);
+                
+                editInput.onblur = () => simpanEditWaktu(index, editInput.value);
+                editInput.onkeypress = (e) => { if(e.key === 'Enter') editInput.blur(); };
+                
+                timeWrapper.innerHTML = '';
+                timeWrapper.appendChild(editInput);
+                editInput.focus();
+            };
+            
+            timeWrapper.appendChild(timeBtn);
+            
+            const inputDesc = document.createElement('input');
+            inputDesc.className = 'ts-desc';
+            inputDesc.type = 'text';
+            inputDesc.value = ts.text;
+            inputDesc.oninput = (e) => { timestamps[index].text = e.target.value; };
+            
+            const delBtn = document.createElement('button');
+            delBtn.className = 'ts-del';
+            delBtn.innerText = '×';
+            delBtn.onclick = () => { timestamps.splice(index, 1); renderList(); };
+            
+            row.appendChild(timeWrapper);
+            row.appendChild(inputDesc);
+            row.appendChild(delBtn);
+            container.appendChild(row);
+        });
+    }
+
+    function simpanEditWaktu(index, timeStr) {
+        const parts = timeStr.split(':').reverse();
+        let totalDetik = 0;
+        if(parts[0]) totalDetik += parseInt(parts[0]);
+        if(parts[1]) totalDetik += parseInt(parts[1]) * 60;
+        if(parts[2]) totalDetik += parseInt(parts[2]) * 3600;
+        
+        timestamps[index].time = totalDetik;
+        timestamps.sort((a, b) => a.time - b.time);
+        renderList();
+    }
+
+    document.getElementById('descInput').addEventListener('keypress', e => { 
+        if (e.key === 'Enter') captureTime(); 
+    });
+
+    // -- MODE LAYAR PRIVASI --
+    function toggleTDM() {
+        isTDM = !isTDM;
+        if(isTDM) isGS = false; 
+        updateModeLayar();
+    }
+    
+    function toggleGS() {
+        isGS = !isGS;
+        if(isGS) isTDM = false; 
+        updateModeLayar();
+    }
+
+    document.addEventListener('keydown', e => {
+        if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+        if (e.key === 'Escape') { e.preventDefault(); toggleTDM(); }
+        if (e.shiftKey && e.key === '!') { e.preventDefault(); toggleGS(); }
+    });
+
+    function updateModeLayar() {
+        document.getElementById('tdmOverlay').style.display = isTDM ? 'block' : 'none';
+        document.getElementById('gsOverlay').style.display = isGS ? 'block' : 'none';
+    }
+
+    // -- EKSPOR DATA --
+    function getHeaderInfo() {
+        if(player && typeof player.getVideoData === 'function') {
+            const data = player.getVideoData();
+            const url = player.getVideoUrl();
+            if(data && data.title) return `${data.author} - ${data.title}\n${url}\n\n`;
+        }
+        return "";
+    }
+
+    function generateRawText() {
+        const header = getHeaderInfo();
+        const body = timestamps.map(ts => `${formatTime(ts.time)} - ${ts.text}`).join('\n');
+        const credit = "\n\n-- Timestamp generated via Workspace Kacang Beruntung --";
+        return header + body + credit;
+    }
+
+    function copyToClipboard() {
+        if(timestamps.length === 0) return;
+        navigator.clipboard.writeText(generateRawText()).then(() => {
+            const btn = event.target;
+            const ori = btn.innerText;
+            btn.innerText = "✅ Copied!";
+            setTimeout(() => btn.innerText = ori, 2000);
+        });
+    }
+
+    function exportTxt() {
+        if(timestamps.length === 0) return alert("Belum ada data.");
+        const blob = new Blob([generateRawText()], { type: 'text/plain' });
+        const anchor = document.createElement('a');
+        anchor.download = "Hasil_Timestamp_VOD.txt";
+        anchor.href = window.URL.createObjectURL(blob);
+        anchor.click();
+    }
+
+    function importTxt() {
+        const input = prompt("Paste hasil teks timestamp sebelumnya di sini:");
+        if(!input) return;
+        
+        const lines = input.split('\n');
+        lines.forEach(line => {
+            const match = line.match(/^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})\s+-\s+(.*)$/);
+            if(match) {
+                const h = parseInt(match[1] || 0);
+                const m = parseInt(match[2] || 0);
+                const s = parseInt(match[3] || 0);
+                const text = match[4].trim();
+                const totalSec = (h * 3600) + (m * 60) + s;
+                timestamps.push({ id: Date.now() + Math.random(), time: totalSec, text: text });
+            }
+        });
+        
+        timestamps.sort((a, b) => a.time - b.time);
+        renderList();
+    }
+
+    function clearList() {
+        if(confirm("Hapus semua data?")) { timestamps = []; lastAddedId = null; renderList(); }
+    }
+</script>
+
+</body>
+</html>
