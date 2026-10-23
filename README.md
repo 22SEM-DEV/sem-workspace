@@ -1,2 +1,2 @@
 # sem-workspace
-Workspace alat bantu timestamp
+Workspace alat bantu ts
